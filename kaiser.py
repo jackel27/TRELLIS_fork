@@ -1,14 +1,3 @@
-#!/usr/bin/env python3
-"""
-Author: David Kaiser (davidcorykaiser@gmail.com)
-
-Description:
-    A Gradio application for converting 2D images (or multiple 2D images) 
-    to a 3D model using the TRELLIS pipeline. This version includes a 
-    dark theme, some UI enhancements, and an overall improvement 
-    of code readability/organization.
-"""
-
 import os
 import shutil
 import numpy as np
@@ -18,10 +7,10 @@ from typing import Tuple, List, Literal
 from PIL import Image
 from easydict import EasyDict as edict
 import gradio as gr
+
 from gradio_litmodel3d import LitModel3D
 
-# Import the pipeline and classes you need from your local Trellis library
-# Adjust the import statements to match your directory structure
+# Your local Trellis imports...
 from trellis.pipelines import TrellisImageTo3DPipeline
 from trellis.representations import Gaussian, MeshExtractResult
 from trellis.utils import render_utils, postprocessing_utils
@@ -52,8 +41,6 @@ def preprocess_image(image: Image.Image) -> Image.Image:
     Placeholder for any image preprocessing logic you want.
     In the original code, we rely on pipeline.preprocess_image().
     """
-    # Possibly do your own custom logic or resizing, etc.
-    # Return the image as-is if you like:
     return pipeline.preprocess_image(image)
 
 def preprocess_images(images: List[Image.Image]) -> List[Image.Image]:
@@ -255,46 +242,16 @@ def split_image(image: Image.Image) -> List[Image.Image]:
     """
     Split a single horizontally stitched image into three separate images
     for multi-view input. 
-    This is a naive approach: it checks the alpha channel transitions 
-    or just splits by 3 if there's no alpha.
     """
-    # If the user example images don't have alpha channel, you might want to
-    # just do a direct 3-split or something more straightforward.
-    # Below logic is from the original code, but we can adapt:
     image_array = np.array(image)
-    if image_array.shape[-1] == 4:
-        # If there's alpha, find transitions:
-        alpha = image_array[..., 3] > 0
-        alpha_col = np.any(alpha, axis=0)
-        start_positions = np.where(~alpha_col[:-1] & alpha_col[1:])[0].tolist()
-        end_positions   = np.where(alpha_col[:-1] & ~alpha_col[1:])[0].tolist()
-
-        # Try naive approach if start_positions or end_positions are empty
-        if not start_positions or not end_positions:
-            # fallback to 3-split
-            width = image_array.shape[1]
-            split_width = width // 3
-            sub_images = []
-            for i in range(3):
-                sub_im = image_array[:, i * split_width:(i+1)*split_width, :]
-                sub_images.append(Image.fromarray(sub_im))
-            return [preprocess_image(img) for img in sub_images]
-
-        # If we do have transitions, slice each region
-        sub_images = []
-        for s, e in zip(start_positions, end_positions):
-            sub_im = image_array[:, s:e + 1]
-            sub_images.append(Image.fromarray(sub_im))
-        return [preprocess_image(img) for img in sub_images]
-    else:
-        # fallback: 3-split by width
-        width = image_array.shape[1]
-        split_width = width // 3
-        sub_images = []
-        for i in range(3):
-            sub_im = image_array[:, i * split_width:(i+1)*split_width, :]
-            sub_images.append(Image.fromarray(sub_im))
-        return [preprocess_image(img) for img in sub_images]
+    # fallback: 3-split by width
+    width = image_array.shape[1]
+    split_width = width // 3
+    sub_images = []
+    for i in range(3):
+        sub_im = image_array[:, i * split_width:(i+1)*split_width, :]
+        sub_images.append(Image.fromarray(sub_im))
+    return [preprocess_image(img) for img in sub_images]
 
 ########################################################################
 # Gradio Interface
@@ -304,15 +261,24 @@ def split_image(image: Image.Image) -> List[Image.Image]:
 pipeline = TrellisImageTo3DPipeline.from_pretrained("JeffreyXiang/TRELLIS-image-large")
 pipeline.cuda()
 
-with gr.Blocks(theme=gr.themes.Base(
+# 1) Create a base theme
+dark_theme = gr.themes.Base(
     primary_hue="slate",
     secondary_hue="blue",
     neutral_hue="slate",
-    text_color="white",
-    background_fill_primary="#121212",  # Dark background
-    background_fill_secondary="#1E1E1E",
-    background_fill_overlay="#333333"
-)) as demo:
+)
+
+# 2) Customize it using the .set() method (attributes vary by Gradio version!)
+dark_theme = dark_theme.set(
+    body_text_color="white",
+    body_background_color="#121212",    # The body color
+    block_background_fill="#1E1E1E",    # The main Blocks background
+    # You could add or remove other properties here depending on your version
+    # e.g. block_secondary_background_fill="#333333",
+    # etc...
+)
+
+with gr.Blocks(theme=dark_theme) as demo:
 
     gr.Markdown(
         """
@@ -401,7 +367,6 @@ with gr.Blocks(theme=gr.themes.Base(
             with gr.Row():
                 extract_glb_btn = gr.Button("Extract GLB", interactive=False)
                 extract_gs_btn = gr.Button("Extract Gaussian (PLY)", interactive=False)
-                # Additional info
             gr.Markdown(
                 """
                 <span style="color:lightgray;">
@@ -430,15 +395,18 @@ with gr.Blocks(theme=gr.themes.Base(
                 download_glb = gr.DownloadButton(label="Download GLB", interactive=False)
                 download_gs = gr.DownloadButton(label="Download Gaussian", interactive=False)
 
-    # Hidden states to keep track of 
+    # Hidden states
     is_multiimage = gr.State(False)
     output_buf = gr.State()
 
-    # Examples Section
+    # Examples: Single
     with gr.Row(visible=True) as single_image_example:
         gr.Markdown("<h3 style='color:white;'>Single Image Examples</h3>")
         examples = gr.Examples(
-            examples=[os.path.join("assets", "example_image", img) for img in os.listdir(os.path.join(THIS_DIR, "assets", "example_image"))],
+            examples=[
+                os.path.join("assets", "example_image", img)
+                for img in os.listdir(os.path.join(THIS_DIR, "assets", "example_image"))
+            ],
             inputs=[image_prompt],
             outputs=[image_prompt],
             fn=preprocess_image,
@@ -447,6 +415,7 @@ with gr.Blocks(theme=gr.themes.Base(
             elem_id="single-examples",
         )
 
+    # Examples: Multi
     with gr.Row(visible=False) as multiimage_example:
         gr.Markdown("<h3 style='color:white;'>Multi-Image Examples</h3>")
         examples_multi = gr.Examples(
@@ -467,16 +436,18 @@ with gr.Blocks(theme=gr.themes.Base(
     demo.load(start_session)
     demo.unload(end_session)
 
-    # Tab switching: Single vs Multi
+    # Tab switching
     def activate_single_tab():
         return (False, gr.Row.update(visible=True), gr.Row.update(visible=False))
     def activate_multi_tab():
         return (True, gr.Row.update(visible=False), gr.Row.update(visible=True))
 
-    single_image_input_tab.select(fn=activate_single_tab, outputs=[is_multiimage, single_image_example, multiimage_example])
-    multiimage_input_tab.select(fn=activate_multi_tab, outputs=[is_multiimage, single_image_example, multiimage_example])
+    single_image_input_tab.select(fn=activate_single_tab, 
+                                  outputs=[is_multiimage, single_image_example, multiimage_example])
+    multiimage_input_tab.select(fn=activate_multi_tab, 
+                                outputs=[is_multiimage, single_image_example, multiimage_example])
 
-    # Handle upload to apply your pipeline’s preprocess
+    # Handle upload (preprocess)
     image_prompt.upload(preprocess_image, inputs=[image_prompt], outputs=[image_prompt])
     multiimage_prompt.upload(preprocess_images, inputs=[multiimage_prompt], outputs=[multiimage_prompt])
 
