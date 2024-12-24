@@ -249,7 +249,7 @@ def split_image(image: Image.Image) -> List[Image.Image]:
     split_width = width // 3
     sub_images = []
     for i in range(3):
-        sub_im = image_array[:, i * split_width:(i+1)*split_width, :]
+        sub_im = image_array[:, i * split_width : (i+1) * split_width, :]
         sub_images.append(Image.fromarray(sub_im))
     return [preprocess_image(img) for img in sub_images]
 
@@ -268,14 +268,11 @@ dark_theme = gr.themes.Base(
     neutral_hue="slate",
 )
 
-# 2) Customize it using the .set() method (attributes vary by Gradio version!)
+# 2) Customize it using valid parameters from the docstring
 dark_theme = dark_theme.set(
     body_text_color="white",
-    body_background_color="#121212",    # The body color
-    block_background_fill="#1E1E1E",    # The main Blocks background
-    # You could add or remove other properties here depending on your version
-    # e.g. block_secondary_background_fill="#333333",
-    # etc...
+    body_background_fill="#121212",  # The body color
+    block_background_fill="#1E1E1E", # The main Blocks background
 )
 
 with gr.Blocks(theme=dark_theme) as demo:
