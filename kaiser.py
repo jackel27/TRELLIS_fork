@@ -153,7 +153,8 @@ def image_to_3d(
 
     video_color = render_utils.render_video(gauss_obj, num_frames=120)['color']
     video_geo   = render_utils.render_video(mesh_obj, num_frames=120)['normal']
-    merged_video = [np.concatenate([video_color[i], video_geo[i]], axis=1) for i in range(len(video_color))]
+    merged_video = [np.concatenate([video_color[i], video_geo[i]], axis=1)
+                    for i in range(len(video_color))]
 
     # Save video
     video_path = os.path.join(user_dir, 'sample.mp4')
@@ -241,7 +242,7 @@ def prepare_multi_example() -> List[Image.Image]:
 def split_image(image: Image.Image) -> List[Image.Image]:
     """
     Split a single horizontally stitched image into three separate images
-    for multi-view input. 
+    for multi-view input.
     """
     image_array = np.array(image)
     # fallback: 3-split by width
@@ -249,7 +250,7 @@ def split_image(image: Image.Image) -> List[Image.Image]:
     split_width = width // 3
     sub_images = []
     for i in range(3):
-        sub_im = image_array[:, i * split_width : (i+1) * split_width, :]
+        sub_im = image_array[:, i * split_width:(i+1)*split_width, :]
         sub_images.append(Image.fromarray(sub_im))
     return [preprocess_image(img) for img in sub_images]
 
@@ -261,20 +262,27 @@ def split_image(image: Image.Image) -> List[Image.Image]:
 pipeline = TrellisImageTo3DPipeline.from_pretrained("JeffreyXiang/TRELLIS-image-large")
 pipeline.cuda()
 
-# 1) Create a base theme
+#############################################################################
+# Create and Configure the Dark Theme
+#############################################################################
+
 dark_theme = gr.themes.Base(
     primary_hue="slate",
     secondary_hue="blue",
     neutral_hue="slate",
 )
 
-# 2) Customize it using valid parameters from the docstring
+# Use only valid .set parameters based on your docstring
 dark_theme = dark_theme.set(
-    body_text_color="white",
-    body_background_fill="#121212",  # The body color
-    block_background_fill="#1E1E1E", # The main Blocks background
+    body_background_fill="#121212",  # Dark overall background
+    body_text_color="white",         # White text
+    block_background_fill="#1E1E1E", # Dark fill for blocks
 )
 
+
+#############################################################################
+# Build the Interface
+#############################################################################
 with gr.Blocks(theme=dark_theme) as demo:
 
     gr.Markdown(
@@ -317,13 +325,14 @@ with gr.Blocks(theme=dark_theme) as demo:
                     gr.Markdown(
                         """
                         <span style="color:lightgray;">
-                        Input different views of the same object, each image representing a 
-                        unique perspective. This is an experimental algorithm and 
+                        Input different views of the same object, each image representing 
+                        a unique perspective. This is an experimental algorithm and 
                         may not produce the best results for highly dissimilar images.
                         </span>
                         """
                     )
 
+            # Generation Settings
             with gr.Accordion(label="Generation Settings", open=True):
                 randomize_seed = gr.Checkbox(
                     label="Randomize Seed", value=True, 
@@ -337,16 +346,22 @@ with gr.Blocks(theme=dark_theme) as demo:
                     step=1,
                     info="If Randomize Seed is disabled, the generation will be deterministic."
                 )
-                
-                with gr.Box():
-                    gr.Markdown("**Stage 1: Sparse Structure Generation**", elem_id="stage1-label")
-                    ss_guidance_strength = gr.Slider(0.0, 10.0, label="Guidance Strength", value=7.5, step=0.1)
-                    ss_sampling_steps = gr.Slider(1, 50, label="Sampling Steps", value=12, step=1)
-                
-                with gr.Box():
-                    gr.Markdown("**Stage 2: Structured Latent Generation**", elem_id="stage2-label")
-                    slat_guidance_strength = gr.Slider(0.0, 10.0, label="Guidance Strength", value=3.0, step=0.1)
-                    slat_sampling_steps = gr.Slider(1, 50, label="Sampling Steps", value=12, step=1)
+
+                gr.Markdown("**Stage 1: Sparse Structure Generation**", elem_id="stage1-label")
+                ss_guidance_strength = gr.Slider(
+                    0.0, 10.0, label="Guidance Strength", value=7.5, step=0.1
+                )
+                ss_sampling_steps = gr.Slider(
+                    1, 50, label="Sampling Steps", value=12, step=1
+                )
+
+                gr.Markdown("**Stage 2: Structured Latent Generation**", elem_id="stage2-label")
+                slat_guidance_strength = gr.Slider(
+                    0.0, 10.0, label="Guidance Strength", value=3.0, step=0.1
+                )
+                slat_sampling_steps = gr.Slider(
+                    1, 50, label="Sampling Steps", value=12, step=1
+                )
 
                 multiimage_algo = gr.Radio(
                     choices=["stochastic", "multidiffusion"], 
@@ -357,13 +372,19 @@ with gr.Blocks(theme=dark_theme) as demo:
 
             generate_btn = gr.Button("Generate 3D Model", variant="primary")
 
+            # GLB Extraction Settings
             with gr.Accordion(label="GLB Extraction Settings", open=False):
-                mesh_simplify = gr.Slider(0.9, 0.98, label="Simplify", value=0.95, step=0.01)
-                texture_size = gr.Slider(512, 2048, label="Texture Size", value=1024, step=512)
-            
+                mesh_simplify = gr.Slider(
+                    0.9, 0.98, label="Simplify", value=0.95, step=0.01
+                )
+                texture_size = gr.Slider(
+                    512, 2048, label="Texture Size", value=1024, step=512
+                )
+
             with gr.Row():
                 extract_glb_btn = gr.Button("Extract GLB", interactive=False)
                 extract_gs_btn = gr.Button("Extract Gaussian (PLY)", interactive=False)
+
             gr.Markdown(
                 """
                 <span style="color:lightgray;">
@@ -373,6 +394,7 @@ with gr.Blocks(theme=dark_theme) as demo:
                 """
             )
 
+        # Right Column: Video + 3D Model
         with gr.Column():
             video_output = gr.Video(
                 label="Generated 3D Preview (split: color | normals)",
@@ -396,7 +418,9 @@ with gr.Blocks(theme=dark_theme) as demo:
     is_multiimage = gr.State(False)
     output_buf = gr.State()
 
-    # Examples: Single
+    ####################################################################
+    # Examples
+    ####################################################################
     with gr.Row(visible=True) as single_image_example:
         gr.Markdown("<h3 style='color:white;'>Single Image Examples</h3>")
         examples = gr.Examples(
@@ -412,7 +436,6 @@ with gr.Blocks(theme=dark_theme) as demo:
             elem_id="single-examples",
         )
 
-    # Examples: Multi
     with gr.Row(visible=False) as multiimage_example:
         gr.Markdown("<h3 style='color:white;'>Multi-Image Examples</h3>")
         examples_multi = gr.Examples(
@@ -428,14 +451,12 @@ with gr.Blocks(theme=dark_theme) as demo:
     ####################################################################
     # Gradio Event Wiring
     ####################################################################
-
-    # Session management
     demo.load(start_session)
     demo.unload(end_session)
 
-    # Tab switching
     def activate_single_tab():
         return (False, gr.Row.update(visible=True), gr.Row.update(visible=False))
+
     def activate_multi_tab():
         return (True, gr.Row.update(visible=False), gr.Row.update(visible=True))
 
@@ -444,11 +465,11 @@ with gr.Blocks(theme=dark_theme) as demo:
     multiimage_input_tab.select(fn=activate_multi_tab, 
                                 outputs=[is_multiimage, single_image_example, multiimage_example])
 
-    # Handle upload (preprocess)
+    # Handle uploads
     image_prompt.upload(preprocess_image, inputs=[image_prompt], outputs=[image_prompt])
     multiimage_prompt.upload(preprocess_images, inputs=[multiimage_prompt], outputs=[multiimage_prompt])
 
-    # Generate button
+    # Generate button logic
     generate_btn.click(
         fn=get_seed,
         inputs=[randomize_seed, seed],
@@ -472,13 +493,13 @@ with gr.Blocks(theme=dark_theme) as demo:
         outputs=[extract_glb_btn, extract_gs_btn],
     )
 
-    # Clear button logic on new generation
+    # Clear button logic
     video_output.clear(
         fn=lambda: (gr.Button.update(interactive=False), gr.Button.update(interactive=False)),
         outputs=[extract_glb_btn, extract_gs_btn],
     )
 
-    # Extract GLB 
+    # Extract GLB
     extract_glb_btn.click(
         fn=extract_glb,
         inputs=[output_buf, mesh_simplify, texture_size],
@@ -488,7 +509,7 @@ with gr.Blocks(theme=dark_theme) as demo:
         outputs=[download_glb],
     )
 
-    # Extract Gaussian 
+    # Extract Gaussian
     extract_gs_btn.click(
         fn=extract_gaussian,
         inputs=[output_buf],
