@@ -171,7 +171,7 @@ def image_to_3d(
     video_geo = render_utils.render_video(outputs['mesh'][0], num_frames=120)['normal']
     video = [np.concatenate([video[i], video_geo[i]], axis=1) for i in range(len(video))]
     video_path = os.path.join(user_dir, 'sample.mp4')
-    imageio.mimsave(video_path, video, fps=15)
+    imageio.mimsave(video_path, video, fps=60)
     state = pack_state(outputs['gaussian'][0], outputs['mesh'][0])
     torch.cuda.empty_cache()
     return state, video_path
