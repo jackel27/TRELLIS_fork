@@ -527,4 +527,4 @@ with gr.Blocks(theme=dark_theme) as demo:
 
 # Run if called directly
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(share=True)
